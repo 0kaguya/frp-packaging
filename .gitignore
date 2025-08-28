@@ -1,1 +1,6 @@
-/frp_*_linux_arm64*
+/frp_*
+
+/*.pkg.tar.zst
+/local/
+/pkg/
+/src/
