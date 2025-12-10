@@ -38,13 +38,17 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           LINK="https://github.com/fatedier/frp/releases/download/v${VERSION}/frp_${VERSION}_linux_amd64.tar.gz"
           echo "Downloading from: ${LINK}"
-          curl -sSL -O "${LINK}"
+          curl -sSL --fail -O "${LINK}"
           tar -zxvf "frp_${VERSION}_linux_amd64.tar.gz"
           ls -la "frp_${VERSION}_linux_amd64"
       
       - name: Build DEB package
         run: |
           VERSION="${{ steps.version.outputs.version }}"
+          if [ ! -f scripts/build-deb.sh ]; then
+            echo "Error: build-deb.sh script not found"
+            exit 1
+          fi
           chmod +x scripts/build-deb.sh
           ./scripts/build-deb.sh "frp_${VERSION}_linux_amd64"
           ls -la frp_${VERSION}_linux_amd64.deb
@@ -53,7 +57,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: frp_${{ steps.version.outputs.version }}_linux_amd64.deb
-          tag_name: v${{ steps.version.outputs.version }}
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', steps.version.outputs.version) || github.ref }}
           name: FRP v${{ steps.version.outputs.version }}
           body: |
             Debian package for FRP v${{ steps.version.outputs.version }}
