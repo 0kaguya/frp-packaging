@@ -1,15 +1,10 @@
 name: Build and Release DEB Package
 
 on:
+  schedule:
+    # Run every day at 00:00 UTC
+    - cron: '0 0 * * *'
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'FRP version to package (e.g., 0.64.0)'
-        required: true
-        type: string
-  push:
-    tags:
-      - 'v*'
 
 jobs:
   build-deb:
@@ -21,19 +16,39 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
+      - name: Get latest FRP release version
+        id: upstream
+        run: |
+          # Get the latest release from upstream FRP repository
+          LATEST_VERSION=$(curl -s https://api.github.com/repos/fatedier/frp/releases/latest | jq -r '.tag_name' | sed 's/^v//')
+          echo "version=${LATEST_VERSION}" >> $GITHUB_OUTPUT
+          echo "Latest upstream FRP version: ${LATEST_VERSION}"
+      
+      - name: Check if release already exists
+        id: check
+        run: |
+          VERSION="${{ steps.upstream.outputs.version }}"
+          # Check if this version already has a release in this repo
+          if gh release view "v${VERSION}" >/dev/null 2>&1; then
+            echo "Release v${VERSION} already exists, skipping build"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Release v${VERSION} does not exist, proceeding with build"
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
       - name: Determine version
         id: version
+        if: steps.check.outputs.exists == 'false'
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-          else
-            # Extract version from tag (e.g., v0.64.0 -> 0.64.0)
-            VERSION="${GITHUB_REF#refs/tags/v}"
-          fi
+          VERSION="${{ steps.upstream.outputs.version }}"
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Building FRP version: ${VERSION}"
       
       - name: Download FRP release
+        if: steps.check.outputs.exists == 'false'
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           LINK="https://github.com/fatedier/frp/releases/download/v${VERSION}/frp_${VERSION}_linux_amd64.tar.gz"
@@ -43,6 +58,7 @@ jobs:
           ls -la "frp_${VERSION}_linux_amd64"
       
       - name: Build DEB package
+        if: steps.check.outputs.exists == 'false'
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           if [ ! -f scripts/build-deb.sh ]; then
@@ -54,10 +70,11 @@ jobs:
           ls -la frp_${VERSION}_linux_amd64.deb
       
       - name: Create Release
+        if: steps.check.outputs.exists == 'false'
         uses: softprops/action-gh-release@v1
         with:
           files: frp_${{ steps.version.outputs.version }}_linux_amd64.deb
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', steps.version.outputs.version) || github.ref }}
+          tag_name: v${{ steps.version.outputs.version }}
           name: FRP v${{ steps.version.outputs.version }}
           body: |
             Debian package for FRP v${{ steps.version.outputs.version }}

@@ -6,21 +6,19 @@ Make a simple debian package of [frp](https://github.com/fatedier/frp).
 
 #### Automated (GitHub Actions)
 
-The repository includes a GitHub Actions workflow that automatically builds and publishes DEB packages to releases.
+The repository includes a GitHub Actions workflow that automatically checks for new FRP releases daily and builds DEB packages.
 
-**Option 1: Manual trigger**
+**Scheduled automatic builds:**
+- The workflow runs daily at 00:00 UTC
+- Checks the upstream FRP repository for new releases
+- Automatically builds and publishes DEB packages if a new version is detected
+- Skips building if the version has already been packaged
+
+**Manual trigger (for testing):**
 1. Go to the "Actions" tab in the GitHub repository
 2. Select "Build and Release DEB Package" workflow
 3. Click "Run workflow"
-4. Enter the FRP version number (e.g., `0.64.0`)
-5. The workflow will build the package and create a release
-
-**Option 2: Tag-based trigger**
-```shell
-git tag v0.64.0
-git push origin v0.64.0
-```
-The workflow will automatically build and publish the package.
+4. The workflow will check for the latest upstream release and build if needed
 
 **Download the package:**
 Visit the [Releases](../../releases) page to download the built `.deb` package.
