@@ -20,7 +20,17 @@ jobs:
         id: upstream
         run: |
           # Get the latest release from upstream FRP repository
-          LATEST_VERSION=$(curl -s https://api.github.com/repos/fatedier/frp/releases/latest | jq -r '.tag_name' | sed 's/^v//')
+          sudo apt-get update && sudo apt-get install -y jq
+          RESPONSE=$(curl -s --fail https://api.github.com/repos/fatedier/frp/releases/latest)
+          if [ -z "$RESPONSE" ]; then
+            echo "Error: Failed to fetch latest release from upstream"
+            exit 1
+          fi
+          LATEST_VERSION=$(echo "$RESPONSE" | jq -r '.tag_name' | sed 's/^v//')
+          if [ -z "$LATEST_VERSION" ] || [ "$LATEST_VERSION" = "null" ]; then
+            echo "Error: Failed to parse version from upstream release"
+            exit 1
+          fi
           echo "version=${LATEST_VERSION}" >> $GITHUB_OUTPUT
           echo "Latest upstream FRP version: ${LATEST_VERSION}"
       
@@ -39,18 +49,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Determine version
-        id: version
-        if: steps.check.outputs.exists == 'false'
-        run: |
-          VERSION="${{ steps.upstream.outputs.version }}"
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Building FRP version: ${VERSION}"
-      
       - name: Download FRP release
         if: steps.check.outputs.exists == 'false'
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          VERSION="${{ steps.upstream.outputs.version }}"
           LINK="https://github.com/fatedier/frp/releases/download/v${VERSION}/frp_${VERSION}_linux_amd64.tar.gz"
           echo "Downloading from: ${LINK}"
           curl -sSL --fail -O "${LINK}"
@@ -60,7 +62,7 @@ jobs:
       - name: Build DEB package
         if: steps.check.outputs.exists == 'false'
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          VERSION="${{ steps.upstream.outputs.version }}"
           if [ ! -f scripts/build-deb.sh ]; then
             echo "Error: build-deb.sh script not found"
             exit 1
@@ -73,15 +75,15 @@ jobs:
         if: steps.check.outputs.exists == 'false'
         uses: softprops/action-gh-release@v1
         with:
-          files: frp_${{ steps.version.outputs.version }}_linux_amd64.deb
-          tag_name: v${{ steps.version.outputs.version }}
-          name: FRP v${{ steps.version.outputs.version }}
+          files: frp_${{ steps.upstream.outputs.version }}_linux_amd64.deb
+          tag_name: v${{ steps.upstream.outputs.version }}
+          name: FRP v${{ steps.upstream.outputs.version }}
           body: |
-            Debian package for FRP v${{ steps.version.outputs.version }}
+            Debian package for FRP v${{ steps.upstream.outputs.version }}
             
             ## Installation
             ```bash
-            sudo dpkg -i frp_${{ steps.version.outputs.version }}_linux_amd64.deb
+            sudo dpkg -i frp_${{ steps.upstream.outputs.version }}_linux_amd64.deb
             ```
           draft: false
           prerelease: false
