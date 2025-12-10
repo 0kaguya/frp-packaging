@@ -1,0 +1,68 @@
+name: Build and Release DEB Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'FRP version to package (e.g., 0.64.0)'
+        required: true
+        type: string
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-deb:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            # Extract version from tag (e.g., v0.64.0 -> 0.64.0)
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Building FRP version: ${VERSION}"
+      
+      - name: Download FRP release
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          LINK="https://github.com/fatedier/frp/releases/download/v${VERSION}/frp_${VERSION}_linux_amd64.tar.gz"
+          echo "Downloading from: ${LINK}"
+          curl -sSL -O "${LINK}"
+          tar -zxvf "frp_${VERSION}_linux_amd64.tar.gz"
+          ls -la "frp_${VERSION}_linux_amd64"
+      
+      - name: Build DEB package
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          chmod +x scripts/build-deb.sh
+          ./scripts/build-deb.sh "frp_${VERSION}_linux_amd64"
+          ls -la frp_${VERSION}_linux_amd64.deb
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: frp_${{ steps.version.outputs.version }}_linux_amd64.deb
+          tag_name: v${{ steps.version.outputs.version }}
+          name: FRP v${{ steps.version.outputs.version }}
+          body: |
+            Debian package for FRP v${{ steps.version.outputs.version }}
+            
+            ## Installation
+            ```bash
+            sudo dpkg -i frp_${{ steps.version.outputs.version }}_linux_amd64.deb
+            ```
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
